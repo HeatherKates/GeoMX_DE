@@ -11,6 +11,11 @@ The code provided here is fully reproducible. Except for the original dataset .x
 - **scripts/**: Contains all the scripts necessary to reproduce the analysis.
 - **results/**: Directory for storing analysis results.
 
+## Analysis
+
+** Does gene expression level change with increasing (or decreasing) distance from main pancreatic duct? Data was subset to regions of inerest that included an islet and each enriched-cell-type target (AOI) was analyzed separately (endothelial cells, acinar and other cells, beta cells, and duct cells)
+
+
 ## Reproducibility
 
 To ensure full reproducibility, follow the steps below:

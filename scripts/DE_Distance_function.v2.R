@@ -1,14 +1,6 @@
-library(limma)
-library(ggplot2)
-library(dplyr)
-library(ggrepel)
-library(cowplot)
-library(tidyverse)
-
-
 library(standR)
 data_path="/home/hkates/blue_garrett/Campbell-Thompson/P1-P4_DE_Analysis/data"
-data_file="P1-P4.QC.v2.xlsx"
+data_file="P1-P4.QC.v3.xlsx"
 
 library(readxl)
 # Get the sheet names
@@ -28,7 +20,7 @@ sampleAnno <- SegmentProperties
 
 # Create the feature annotation data frame. 
 featureAnno <- BioProbeCountMatrix %>% select(!all_of(SegmentProperties$SegmentDisplayName))
-
+source("/home/hkates/blue_garrett/Campbell-Thompson/P1-P4_DE_Analysis/scripts/geomx_import_fun_HRK.R")
 spe <- geomx_import_fun_HRK(
   counts,
   sampleAnno,
@@ -47,8 +39,9 @@ Subgroup_var="AOI_target"
 
 #Metadata
 library(tidyverse)
-DistanceToMainPancreaticDuct <- read_csv("~/blue_garrett/Campbell-Thompson/GeoMX_DSP_atUF/DistanceToMainPancreaticDuct.csv")
-DistanceToMainPancreaticDuct$merge <- paste(DistanceToMainPancreaticDuct$`Pancreas Section`,DistanceToMainPancreaticDuct$ROILabel,sep="_")
+DistanceToMainPancreaticDuct <- read_csv("/home/hkates/blue_garrett/Campbell-Thompson/P1-P4_DE_Analysis/data/DistanceToMainPancreaticDuct.csv")
+DistanceToMainPancreaticDuct$ROILabel <- sprintf("%03d", as.numeric(DistanceToMainPancreaticDuct$ROILabel))
+DistanceToMainPancreaticDuct$merge <- paste(DistanceToMainPancreaticDuct$PancreasSection,DistanceToMainPancreaticDuct$ROILabel,sep="_")
 # Use gsub to extract the first part before the first space
 spe@colData@listData$Slide <- gsub(" .*", "", spe@colData@listData$SlideName)
 spe@colData@listData$merge <- paste(spe@colData@listData$Slide,spe@colData@listData$ROILabel,sep="_")
@@ -64,6 +57,9 @@ merged_data <- merge(
 # Remove the temporary segment_mapped column
 merged_data$merge<- NULL
 
+#convert literal "N/A" to NA
+merged_data[merged_data == "N/A"] <- NA
+
 # Convert the new columns (last 8 items) to numeric
 cols_to_convert <- tail(names(merged_data), 8)
 merged_data[cols_to_convert] <- lapply(merged_data[cols_to_convert], as.numeric)
@@ -74,12 +70,14 @@ merged_data_list <- as.list(merged_data)
 # Update spe@colData@listData with the merged data
 spe@colData@listData <- merged_data_list
 names(spe@colData@listData)[names(spe@colData@listData) == "Distance from Main Duct (µm)"] <- "Distance_from_Main_Duct"
+
+library(SummarizedExperiment)
 islet_ROIs <- colnames(spe)[colData(spe)[["ROI_type"]] == "islet_present"]
 spe <- spe[, islet_ROIs]
+
 #DE analysis function
 library(limma)
 library(edgeR)
-library(voom)
 
 # Define the subgroups
 subgroups <- c("endothelial_cells", "beta_cells", "duct_cells", "acinar_and_other")
@@ -132,25 +130,59 @@ perform_de_analysis <- function(subgroup) {
 }
 
 # Perform DE analysis for each subgroup and save the results
+library(ggplot2)
+library(ggrepel)
+library(cowplot)
 results <- lapply(subgroups, perform_de_analysis)
 
 # Optionally, you can name the elements of the results list
 names(results) <- subgroups
 
-# Combine individual DE plots into a single plot using cowplot
-combined_DE_plot <- plot_grid(plotlist = lapply(results, function(res) res$DE_plot), ncol = 2)
+#Write the DE results to file
+library(openxlsx)
 
-# Add a title to the combined plot
-combined_DE_plot <- plot_grid(
-  ggdraw() + 
-    draw_label("Differential Expression by Distance from Main Duct (µm)", size = 14),
-  combined_DE_plot,
-  ncol = 1,
-  rel_heights = c(0.1, 1)
-)
+# Create a new workbook
+wb <- createWorkbook()
 
-# Print the combined DE plot
-print(combined_DE_plot)
+# Iterate over each element in the results list
+for (cell_type in names(results)) {
+  # Get the de_results data frame
+  de_results_df <- results[[cell_type]]$de_results
+  
+  # Add rownames as a new column named "Gene"
+  de_results_df$Gene <- rownames(de_results_df)
+  
+  # Select and reorder columns
+  de_results_df <- de_results_df[, c("Gene", "logFC", "AveExpr", "t", "P.Value", "adj.P.Val", "B", "contrast", "color_factor")]
+  
+  # Rename "color_factor" to "change_direction"
+  colnames(de_results_df)[which(names(de_results_df) == "color_factor")] <- "change_direction"
+  colnames(de_results_df)[which(names(de_results_df) == "logFC")] <- "coefficient"
+  # Add "model" and "subset" columns
+  de_results_df$model <- "Gene Expression ~ Distance_from_Main_Duct + Case"
+  de_results_df$subset <- "islet present ROIs"
+  
+  # Add a new sheet with the name of the cell type
+  addWorksheet(wb, cell_type)
+  
+  # Write the data frame to the new sheet
+  writeData(wb, sheet = cell_type, de_results_df)
+}
+
+# Save the workbook to a file
+saveWorkbook(wb, file = "/home/hkates/blue_garrett/Campbell-Thompson/P1-P4_DE_Analysis/results/Distance_from_duct_DE_Results.xlsx", overwrite = TRUE)
+
+# Define the path for saving plots
+plot_save_path <- "/home/hkates/blue_garrett/Campbell-Thompson/P1-P4_DE_Analysis/results/plots/"
+
+# Loop through each element in the results list
+for (cell_type in names(results)) {
+  # Get the DE_plot object
+  de_plot <- results[[cell_type]]$DE_plot
+  de_plot <- de_plot + ggtitle(paste("Differential Expression by Distance from Main Duct (µm) in", cell_type))
+  # Save the modified plot as a PNG file
+   ggsave(filename = paste0(plot_save_path, cell_type, "_DE_plot.png"), plot = de_plot, width = 10, height = 8)
+}
 
 # Function to plot gene expression
 plot_gene_expression <- function(gene_id, spe_sub) {
@@ -194,7 +226,7 @@ for (subgroup in subgroups) {
   top_genes <- rownames(de_results[order(de_results$P.Value), ])[1:20]
   plots <- lapply(top_genes, plot_gene_expression, spe_sub = spe_sub)
   
-  combined_plot <- plot_grid(plotlist = plots, ncol = 4)
+  combined_plot <- plot_grid(plotlist = plots, ncol = 3)
   
   combined_plot <- plot_grid(
     ggdraw() + 
@@ -207,31 +239,10 @@ for (subgroup in subgroups) {
   combined_plots[[subgroup]] <- combined_plot
 }
 
-# Print all combined plots
 for (subgroup in subgroups) {
-  print(combined_plots[[subgroup]])
-}
-# Combine plots for each subgroup
-for (subgroup in subgroups) {
-  de_results <- results[[subgroup]]$de_results
-  spe_sub <- results[[subgroup]]$spe_sub
-  top_genes <- rownames(de_results[order(de_results$P.Value), ])[1:20]
-  plots <- lapply(top_genes, plot_gene_expression, spe_sub = spe_sub)
-  
-  combined_plot <- plot_grid(plotlist = plots, ncol = 4)
-  
-  combined_plot <- plot_grid(
-    ggdraw() + 
-      draw_label(paste("Gene Expression vs Distance from Main Duct in", unique(colData(spe_sub)$AOI_target), "enriched AOI (islet present ROI)\n (top 20 DE genes)"), size = 14),
-    combined_plot,
-    ncol = 1,
-    rel_heights = c(0.1, 1)
-  )
-  
-  combined_plots[[subgroup]] <- combined_plot
-}
-
-# Print all combined plots
-for (subgroup in subgroups) {
-  print(combined_plots[[subgroup]])
+  # Get the DE_plot object
+  plot <- combined_plots[[subgroup]]
+  #plot <- plot + ggtitle(paste("Differential Expression by Distance from Main Duct (µm) in", cell_type))
+  # Save the modified plot as a PNG file
+  ggsave(filename = paste0(plot_save_path, subgroup, "_top_DE_genes_regression_plot.png"), plot = plot, width = 10, height = 15)
 }
