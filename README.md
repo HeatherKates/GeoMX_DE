@@ -13,7 +13,7 @@ The code provided here is fully reproducible. Except for the original dataset .x
 
 ## Analysis
 
-** Does gene expression level change with increasing (or decreasing) distance from main pancreatic duct?**
+**Does gene expression level change with increasing (or decreasing) distance from main pancreatic duct?**
  Data was subset to regions of inerest that included an islet and each enriched-cell-type target (AOI) was analyzed separately (endothelial cells, acinar and other cells, beta cells, and duct cells)
 
 
