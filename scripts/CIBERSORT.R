@@ -74,6 +74,11 @@ names(spe@colData@listData)[names(spe@colData@listData) == "Distance from Main D
 
 library(SummarizedExperiment)
 library(CIBERSORT)
+source("cibersort_mod.R") #modify not to quit if a sample fails
+#preprocessCore MUST be installed manually to disable threading or cibersort will fail. Use steps below
+#git clone https://github.com/bmbolstad/preprocessCore.git
+#cd preprocessCore
+#R CMD INSTALL --configure-args="--disable-threading" -l /home/hkates/R/x86_64-pc-linux-gnu-library/4.4/ .
 library(preprocessCore)
 library(pheatmap)
 
