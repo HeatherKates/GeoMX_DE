@@ -96,9 +96,10 @@ cibersort_func <- function(subset) {
   write_tsv(logcounts, file = paste0("/blue/timgarrett/hkates/Campbell-Thompson/P1-P4_DE_Analysis/scripts/data/",subset, "ROI.txt"))
   
   # Run CIBERSORT and clean the results
-  results <- cibersort(sig_matrix, paste0("/blue/timgarrett/hkates/Campbell-Thompson/P1-P4_DE_Analysis/scripts/data/",subset, "ROI.txt"))
-  results_clean <- results[, 1:(ncol(results) - 3)]
+  results <- cibersort(sig_matrix, paste0("/blue/timgarrett/hkates/Campbell-Thompson/P1-P4_DE_Analysis/scripts/data/",subset, "ROI.txt"),perm=100)
   
+  results_clean <- results[, 1:(ncol(results) - 3)]
+  results <- merge(results,spe_subset@colData,by=0)
   # Replace NA values with a placeholder value, e.g., 0
   df_clean <- results_clean
   df_clean[is.na(df_clean)] <- 0
@@ -120,7 +121,7 @@ cibersort_func <- function(subset) {
   )
   
   # Return a list with the cleaned results and the heatmap plot
-  return(list(results_clean = df_clean, heatmap_plot = heatmap_plot))
+  return(list(results_clean = results, heatmap_plot = heatmap_plot))
 }
 
 # Example of running the function for each subset
@@ -150,3 +151,42 @@ for (subset_name in names(results_list)) {
   print(heatmap_plot)  # Print the plot to the device
   dev.off()  # Close the device
 }
+
+library(openxlsx)
+
+# Create the README data frame
+column_descriptions <- data.frame(
+  Column = colnames(results_list$acinar_and_other$results_clean),
+  Description = c(
+    "AOI name including scan, ROI, and segment",                                # Col 1
+    rep("Estimated cell type proportion (0 to 1) for this cell type. Proportions of all cell types sum to 1", 22),  # Cols 2:23
+    "P-value: Statistical significance of the estimated cell fractions",        # Col 24
+    "Correlation: Pearson correlation between observed and predicted cell type proportions. Assesses model fit. Higher is better fit.",  # Col 25
+    "RMSE: Root Mean Square Error between observed and predicted values. Assesses model fit. Lower is better fit.",       # Col 26
+    rep("Additional GeoMX DSP AOI metadata", length(colnames(results_list$acinar_and_other$results_clean)) - 26)  # Cols 27:80
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Create a new Excel workbook
+wb <- createWorkbook()
+
+# Add the README sheet
+addWorksheet(wb, "README")
+writeData(wb, "README", column_descriptions)
+
+# Loop over each subset and add as a new sheet
+for (subset_name in names(results_list)) {
+  df <- results_list[[subset_name]]$results_clean
+  df[, 2:25] <- round(df[, 2:25], digits = 3)
+  df <- df %>% rename("Sample" = "Row.names")
+  df$Sample <- gsub("PsnCK", "PanCK", df$Sample)
+  
+  # Add the worksheet with the subset name
+  addWorksheet(wb, subset_name)
+  writeData(wb, subset_name, df)
+}
+
+# Save the workbook to a file
+saveWorkbook(wb, file = "/blue/timgarrett/hkates/Campbell-Thompson/P1-P4_DE_Analysis/results/CIBERSORT/CIBERSORT_results.xlsx", overwrite = TRUE)
+
