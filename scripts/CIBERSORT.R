@@ -88,10 +88,10 @@ cibersort_func <- function(subset) {
   logcounts <- as.data.frame(spe_subset@assays@data@listData[["logcounts"]])
   logcounts$`Gene symbol` <- rownames(logcounts)
   logcounts <- logcounts %>% dplyr::relocate("Gene symbol")
-  write_tsv(logcounts, file = paste0(subset, "ROI.txt"))
+  write_tsv(logcounts, file = paste0("/blue/timgarrett/hkates/Campbell-Thompson/P1-P4_DE_Analysis/scripts/data/",subset, "ROI.txt"))
   
   # Run CIBERSORT and clean the results
-  results <- cibersort(sig_matrix, paste0(subset, "ROI.txt"))
+  results <- cibersort(sig_matrix, paste0("/blue/timgarrett/hkates/Campbell-Thompson/P1-P4_DE_Analysis/scripts/data/",subset, "ROI.txt"))
   results_clean <- results[, 1:(ncol(results) - 3)]
   
   # Replace NA values with a placeholder value, e.g., 0
@@ -138,7 +138,7 @@ for (subset_name in names(results_list)) {
   heatmap_plot <- results_list[[subset_name]]$heatmap_plot
   
   # Set the filename using the subset name
-  filename <- paste0("Heatmap_of_CIBERSORT_results_", subset_name, "AOIs.png")
+  filename <- paste0( "/blue/timgarrett/hkates/Campbell-Thompson/P1-P4_DE_Analysis/results/CIBERSORT/","Heatmap_of_CIBERSORT_results_", subset_name, "AOIs.png")
   
   # Save the plot to a PNG file
   png(filename, width = 3000, height = 2500, res = 300)
