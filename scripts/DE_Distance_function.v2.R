@@ -13,6 +13,7 @@ for (sheet in sheet_names) {
 
 # Create the count data frame. Samples in columns and features/genes in rows. The first column is the gene names/ids
 library(dplyr)
+select <- dplyr::select
 counts <- BioProbeCountMatrix %>% select(TargetName,all_of(SegmentProperties$SegmentDisplayName))
 
 # Create the sample annotation data frame.
