@@ -21,7 +21,7 @@ sampleAnno <- SegmentProperties
 
 # Create the feature annotation data frame. 
 featureAnno <- BioProbeCountMatrix %>% select(!all_of(SegmentProperties$SegmentDisplayName))
-source("/home/hkates/blue_garrett/Campbell-Thompson/P1-P4_DE_Analysis/scripts/geomx_import_fun_HRK.R")
+source("scripts/helper_functions/geomx_import_fun_HRK.R")
 spe <- geomx_import_fun_HRK(
   counts,
   sampleAnno,
@@ -40,7 +40,7 @@ Subgroup_var="AOI_target"
 
 #Metadata
 library(tidyverse)
-DistanceToMainPancreaticDuct <- read_csv("/home/hkates/blue_garrett/Campbell-Thompson/P1-P4_DE_Analysis/data/DistanceToMainPancreaticDuct.csv")
+DistanceToMainPancreaticDuct <- read_csv("data/DistanceToMainPancreaticDuct.csv")
 DistanceToMainPancreaticDuct$ROILabel <- sprintf("%03d", as.numeric(DistanceToMainPancreaticDuct$ROILabel))
 DistanceToMainPancreaticDuct$merge <- paste(DistanceToMainPancreaticDuct$PancreasSection,DistanceToMainPancreaticDuct$ROILabel,sep="_")
 # Use gsub to extract the first part before the first space
@@ -74,7 +74,7 @@ names(spe@colData@listData)[names(spe@colData@listData) == "Distance from Main D
 
 library(SummarizedExperiment)
 library(CIBERSORT)
-source("cibersort_mod.R") #modify not to quit if a sample fails
+source("scripts/helper_functions/cibersort_mod.R") #modify not to quit if a sample fails
 #preprocessCore MUST be installed manually to disable threading or cibersort will fail. Use steps below
 #git clone https://github.com/bmbolstad/preprocessCore.git
 #cd preprocessCore
