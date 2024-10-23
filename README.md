@@ -44,10 +44,13 @@ This repository contains scripts and files related to the differential expressio
     - **plots/**: Contains PNG plots for each analysis.
 
 - **`DistanceToDuct/`**  
-  Contains analyses related to distance from the pancreatic duct.
+  Contains analyses related to **Does gene expression level change with increasing (or decreasing) distance fro
+m main pancreatic duct?**
+
+ Data was subset to regions of inerest that included an islet and each enriched-cell-type target (AOI) was analyzed separately (endothelial cells, acinar and other cells, beta cells, and duct cells)
   
   - **data/**: Input data for distance-based analyses.
-    - **`DistanceToMainPancreaticDuct.csv`**: Data for pancreatic duct distances.
+    - **`DistanceToMainPancreaticDuct.csv`**: Data for pancreatic duct distances. Created by Sam Ewing.
   
   - **results/**: DE results based on distance.
     - **CIBERSORT/**: Contains CIBERSORT results and heatmaps.
