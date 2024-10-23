@@ -195,11 +195,16 @@ saveWorkbook(wb, file = output_file, overwrite = TRUE)
 cat("Workbook saved to", output_file, "\n")
 
 
+library(gridExtra)
+
 # Define the path for saving plots
 plot_save_path <- "../results/plots/"
 
 # Loop through each cell type in the results list
 for (cell_type in names(results)) {
+  # Initialize an empty list to store the plots for the current cell type
+  plot_list <- list()
+  
   # Loop through each comparison within the current cell type
   for (comparison in names(results[[cell_type]])) {
     # Get the DE_plot object for the current comparison
@@ -208,9 +213,16 @@ for (cell_type in names(results)) {
     # Add a title to the plot based on the cell type and comparison
     de_plot <- de_plot + ggtitle(paste("Differential Expression by organ region in", cell_type, "-", comparison))
     
-    # Save the modified plot as a PNG file
-    plot_file_name <- paste0(plot_save_path, cell_type, "_", comparison, "_DE_plot_", Sys.Date(), ".png")
-    ggsave(filename = plot_file_name, plot = de_plot, width = 10, height = 8)
+    # Store the plot in the plot_list
+    plot_list[[comparison]] <- de_plot
   }
+  
+  # Arrange the plots in a 2x3 grid and save them as a single PNG file
+  combined_plot <- marrangeGrob(grobs = plot_list, nrow = 2, ncol = 3)
+  plot_file_name <- paste0(plot_save_path, cell_type, "_combined_DE_plots", ".png")
+  
+  # Save the combined plot
+  ggsave(filename = plot_file_name, combined_plot, width = 15, height = 10)
 }
+
 
