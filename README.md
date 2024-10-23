@@ -1,40 +1,80 @@
-# Spatial RNAseq of HuBMAP pancreas
+# Spatial RNAseq and Proteomics of HuBMAP Pancreas
 
-This repository contains scripts and files related to the DE analysis of RNAseq data generated from GeoMX DSP libraries. 
+**Overview**
+This repository contains scripts and files related to the differential expression (DE) analysis of **RNAseq** and **protein expression data** generated from GeoMX DSP libraries from four donor pancreases.
 
-## Overview
+## Repository Structure
 
-The code provided here is fully reproducible. Except for the original dataset .xlsx files (generated on the GeoMX DSP analysis suite based on proprietary counts and QC DCC files generated from .fastq.gx files by Nanostring NGS pipeline on BaseSpace by ICBR staff), all other files and results can be recreated using the scripts included in this repository. Due to size constraints and data ownership, large files and non public files are omitted. For access to these files, please see the `.gitignore` and email [hkates@ufl.edu](mailto:hkates@ufl.edu).
+```plaintext  
+.
+├── DE_by_region
+│   ├── data
+│   │   └── P1-P4.QC.v3.xlsx
+│   ├── results
+│   │   ├── By_Region_DE_Results_2024-10-23.xlsx
+│   │   └── plots
+│   │       ├── endothelial_Body_vs_Head_DE_plot_2024-10-23.png
+│   │       ├── endothelial_Body_vs_Neck_DE_plot_2024-10-23.png
+│   └── scripts
+│       └── DE_Distance_function.R
+├── DistanceToDuct
+│   ├── data
+│   │   └── DistanceToMainPancreaticDuct.csv
+│   ├── results
+│   │   └── CIBERSORT
+│   └── scripts
+│       └── CIBERSORT.R
+├── HuBMAP_nPOD
+│   └── data
+├── Proteomics
+│   └── data
+└── README.md
+```
 
-## Directory Structure
+### Directory Breakdown:
 
-- **scripts/**: Contains all the scripts necessary to reproduce the analysis.
-- **results/**: Directory for storing analysis results.
+- **`DE_by_region/`**  
+  Contains analyses of differential expression by pancreatic region (e.g., Body vs Head, Neck vs Tail).
 
-## Analysis
+  - **data/**: Input data used for the analyses.
+    - **`P1-P4.QC.v3.xlsx`**: QC and data for four donors.
+  
+  - **results/**: Contains results and plots of the DE analysis.
+    - **`By_Region_DE_Results_2024-10-23.xlsx`**: Output summarizing DE analysis.
+    - **plots/**: Contains PNG plots for each analysis.
 
-**Does gene expression level change with increasing (or decreasing) distance from main pancreatic duct?**
- Data was subset to regions of inerest that included an islet and each enriched-cell-type target (AOI) was analyzed separately (endothelial cells, acinar and other cells, beta cells, and duct cells)
+- **`DistanceToDuct/`**  
+  Contains analyses related to distance from the pancreatic duct.
+  
+  - **data/**: Input data for distance-based analyses.
+    - **`DistanceToMainPancreaticDuct.csv`**: Data for pancreatic duct distances.
+  
+  - **results/**: DE results based on distance.
+    - **CIBERSORT/**: Contains CIBERSORT results and heatmaps.
 
+- **`Proteomics/`**  
+  Contains analyses of proteomics data.
+
+  - **data/**: Contains raw and processed data.
+  
+- **`HuBMAP_nPOD/`**  
+  Additional HuBMAP and nPOD analyses, including raw counts.
 
 ## Reproducibility
 
-To ensure full reproducibility, follow the steps below:
+To reproduce the analysis:
 
-1. **Download Original Data**: Obtain the original .xlsx files. Authorized collaborators email: [hkates@ufl.edu](mailto:hkates@ufl.edu) or access file of same name on dropbox.
-2. **Run Scripts**: Use the scripts provided in the `scripts` directory to process the data and generate results.
+1. **Download Original Data**: Contact for access to the original `.xlsx` files.
+2. **Run Scripts**: Use the provided R scripts to process data and generate results.
 
 ## Contact
 
-For access to data by authorized project collaborators or any other inquiries, please contact:
+For questions, please contact:
 
 Heather Kates  
-Email: [hkates@ufl.edu](mailto:hkates@ufl.edu)
-
-## License
-
-None
+Email: hkates@ufl.edu
 
 ## Acknowledgements
 
-This research was supported by NIH NIDDK grant 1U54DK127823-01 Multi-omic 3D tissue maps for a Human BioMolecular Atlas
+This research was supported by NIH NIDDK grant 1U54DK127823-01 Multi-omic 3D tissue maps for a Human BioMolecular Atlas.
+
