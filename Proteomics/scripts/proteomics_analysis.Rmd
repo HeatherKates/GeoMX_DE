@@ -1,7 +1,7 @@
 ---
-title: "Zeina_nCounter_analysis"
+title: "HuBMAP nPOD proteomics analysis"
 author: "Heather Kates"
-date: "2024-03-18"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output: html_document
 ---
 
@@ -16,19 +16,27 @@ library(ggplot2)
 library(reshape2)
 library(pheatmap)
 library(knitr)
+library(readxl)
 ```
 
-## Load the nCounter data
+## Load the data
 
-Load the data downloaded from the GeoMX DSP Initial_Dataset.xlsx and received from Zeina.
+Load the data downloaded from the GeoMX DSP Initial_Dataset.xlsx 
 
 First we will load the data as-is and perform no automatic QC trimming or normalization
 
 ```{r process,warning=FALSE}
-rawdata <- processNanostringData(nsFiles = "Zeina_all_counts.csv",
-                             sampleTab = "Zeina_all_sample_data.csv",
-                             idCol = "idCol",
-                             groupCol = "groups",
+source("helpers.R")
+annotations_data <- read_excel("../data/HuBMAP_ProteomeAtlas_InitialDataset.xlsx", sheet = 1)
+counts_data <- read_excel("../data/HuBMAP_ProteomeAtlas_InitialDataset.xlsx", sheet = 2)
+
+write.csv(counts_data, "../data/counts.csv", row.names = FALSE)
+write.csv(annotations_data, "../data/annotations.csv", row.names = FALSE)
+
+rawdata <- processNanostringData(nsFiles = "../data/counts.csv",
+                             sampleTab = "../data/annotations.csv",
+                             idCol = "SegmentDisplayName",
+                             groupCol = "Segment_name",
                              normalization = "none")
 ```
 
@@ -42,6 +50,8 @@ First, we will compute 2 metrics of AOI technical performance:
 • Housekeeper geomean: this captures signal strength.
 • IgG geomean: this captures background (negative controls), but in most experiments also reflects signal strength, as AOIs with more on-target signal also have more background.
 
+We will remove one AOI with an outlying (high) IgG geomean: P4/P5 Ins/Syto83/PanCK/CD31 7-9-24 | 036 | CD31+
+
 ```{r,QC_HK}
 data <-rawdata
 
@@ -50,7 +60,7 @@ exprs_data <- exprs(data)
 sample_data <- pData(data)
 
 # Define the housekeeper genes names
-hk_genes <- c("GAPDH", "S6", "Histone H3")
+hk_genes <- c("GAPDH", "RPS6", "Histone H3")
 
 # Calculate the geometric mean for housekeeper genes
 geometric_mean <- function(x) {
@@ -68,17 +78,16 @@ hk_geomeans <- apply(exprs_data[hk_genes, ], 2, geometric_mean)
 plot_data <- data.frame(
   Sample = colnames(exprs_data),
   HK_Geomean = log2(hk_geomeans),
-  Scan_Name = sample_data$Scan_Name
+  Scan_Label = sample_data$ScanLabel
 )
 
 # Plot the barplot with no x-axis labels and "Individual AOIs" as the x-axis title
-ggplot(plot_data, aes(x = Sample, y = HK_Geomean, fill = Scan_Name)) +
+ggplot(plot_data, aes(x = Sample, y = HK_Geomean, fill = Scan_Label)) +
   geom_bar(stat = "identity") +
   theme_minimal() +
-  labs(x = "Individual AOIs", y = "Housekeeper Geomean", fill = "Scan Name") +
+  labs(x = "Individual AOIs", y = "Housekeeper Geomean", fill = "Scan Label") +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 ```
-
 
 ```{r QC_bd}
 data <- rawdata
@@ -108,51 +117,46 @@ igG_geomeans <- apply(exprs_data[igG_genes, ], 2, geometric_mean)
 plot_data <- data.frame(
   Sample = colnames(exprs_data),
   IgG_Geomean = igG_geomeans,
-  Scan_Name = sample_data$Scan_Name
+  Scan_Label = sample_data$ScanLabel
 )
 
 # Create the bar plot for IgG genes
-ggplot(plot_data, aes(x = Sample, y = IgG_Geomean, fill = Scan_Name)) +
+ggplot(plot_data, aes(x = Sample, y = IgG_Geomean, fill = Scan_Label)) +
   geom_bar(stat = "identity") +
   theme_minimal() +
-  labs(x = "Individual AOIs", y = "IgG Geomean", fill = "Scan Name") +
+  labs(x = "Individual AOIs", y = "IgG Geomean", fill = "Scan Label") +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+```
+
+```{r}
+sample_names <- colnames(exprs(rawdata))
+# Exclude the sample "P4P5_InsSyto83PanCKCD31_7924_036_CD31"
+rawdata <- rawdata[, !sample_names %in% "P4P5_InsSyto83PanCKCD31_7924_036_CD31"]
 ```
 
 ## Segment QC part II
 
-Technical QC assessment includes FOV registration QC, Binding Density QC, Positive Control Normalization QC, Minimum nuclei count, Minimum surface area
-
+Technical QC assessment includes Minimum nuclei count and Minimum surface area
 
 ```{r QC}
-QC_data <- processNanostringData(nsFiles = "Zeina_all_counts.csv",
-                             sampleTab = "Zeina_all_sample_data.csv",
-                             idCol = "idCol",
-                             groupCol = "groups",
-                             normalization = "nSolver",
+QC_data <- processNanostringData(nsFiles = "../data/counts.csv",
+                             sampleTab = "../data/annotations.csv",
+                             idCol = "SegmentDisplayName",
+                             groupCol = "Segment_name",
+                             normalization = "RUVIII",
                              skip.housekeeping = TRUE,
+                             housekeeping = c("GAPDH", "RPS6", "Histone H3"),
                              output.format = "list")
 ```
 
 ```{r}
-#add pc scale factors to sample data
-QC_data[["samples"]]$pc_scalefactors <-  QC_data[["pc.scalefactors"]]
-
 # Set the thresholds from the GeoMX DSP Analysis Suite
-fov_threshold <- 75
-binding_density_min <- 0.1
-binding_density_max <- 2.25
-pc_norm_min <- 0.3
-pc_norm_max <- 3
 nuclei_count_min <- 20
 surface_area_min <- 1600
 
 # Create QC flags
-QC_data$samples$FOV_QC_Flag <- QC_data$samples$Fov_counted < fov_threshold
-QC_data$samples$BindingDensity_QC_Flag <- with(QC_data$samples, BindingDensity < binding_density_min | BindingDensity > binding_density_max)
-QC_data$samples$PCNorm_QC_Flag <- with(QC_data$samples, pc_scalefactors < pc_norm_min | pc_scalefactors > pc_norm_max)
-QC_data$samples$NucleiCount_QC_Flag <- QC_data$samples$AOI_nuclei_count < nuclei_count_min
-QC_data$samples$SurfaceArea_QC_Flag <- QC_data$samples$AOI_surface_area < surface_area_min
+QC_data$samples$NucleiCount_QC_Flag <- QC_data$samples$AOINucleiCount < nuclei_count_min
+QC_data$samples$SurfaceArea_QC_Flag <- QC_data$samples$AOISurfaceArea < surface_area_min
 ```
 
 ## Results of segment QC
@@ -161,13 +165,13 @@ QC_data$samples$SurfaceArea_QC_Flag <- QC_data$samples$AOI_surface_area < surfac
 # Assuming QC_data is your data frame with sample data and QC flags
 # We'll filter the data for any rows with at least one TRUE flag
 QC_flagged_data <- QC_data$samples %>%
-  filter(FOV_QC_Flag | BindingDensity_QC_Flag | PCNorm_QC_Flag | NucleiCount_QC_Flag | SurfaceArea_QC_Flag) %>%
-  select(idCol, FOV_QC_Flag, BindingDensity_QC_Flag, PCNorm_QC_Flag, NucleiCount_QC_Flag, SurfaceArea_QC_Flag)
+  filter(NucleiCount_QC_Flag | SurfaceArea_QC_Flag) %>%
+  select(SegmentDisplayName, NucleiCount_QC_Flag, SurfaceArea_QC_Flag)
 
 # Print the table using kable in R Markdown
 kable(QC_flagged_data,row.names = FALSE)
 #save to a list
-QC_flagged_segments <- QC_flagged_data$idCol
+QC_flagged_segments <- QC_flagged_data$SegmentDisplayName
 ```
 
 ## Probe QC
@@ -207,8 +211,6 @@ features_ordered <- long_data %>%
   arrange(is_igG, median_value) %>%
   pull(Var1)
 
-features_ordered <- c(features_ordered[c(49,50,51)],features_ordered[c(1:48)])
-
 # Update the variable factor levels to match the order
 long_data$variable <- factor(long_data$Var1, levels = features_ordered)
 
@@ -229,15 +231,37 @@ print(boxplot)
 
 ## Prune the dataset as needed
 
-We will remove the four segments that failed segment QC. 
+No segments failed segment QC, so we do not need to remove anything
 
-```{r}
+```{r,eval=FALSE}
 #Define segments to keep
-QC_passed_segments <- rawdata$idCol[!rawdata$idCol %in% QC_flagged_segments]
+QC_passed_segments <- rawdata$SegmentDisplayName[!rawdata$SegmentDisplayName %in% QC_flagged_segments]
 data_filtered <- rawdata[,QC_passed_segments]
 ```
 
 For now, we will leave all the probes in the dataset even though some have below background signal. We will make a list of these so that we can proceed with caution when evaluating results for these genes
+
+```{r}
+library(dplyr)
+
+# Define a cutoff for poorly performing probes (log2 ratio < 0)
+cutoff <- 0  # You can adjust this based on your criteria
+
+# Calculate median log2 signal-to-background ratio for each probe
+probe_performance <- long_data %>%
+  group_by(Var1) %>%
+  summarize(median_value = median(value, na.rm = TRUE), .groups = 'drop')
+
+# Identify poorly-performing probes where the median log2 ratio is below the cutoff
+poor_probes <- probe_performance %>%
+  filter(median_value < cutoff) 
+
+# Print the list of poorly-performing probes
+print(as.character(poor_probes$Var1)[-grep("Ig",as.character(poor_probes$Var1))])
+
+# Save the poorly-performing probes to a CSV file
+write.csv(poor_probes, "../results/poorly_performing_probes.csv", row.names = FALSE)
+```
 
 ### Normalization
 
@@ -253,7 +277,7 @@ These IgGs measure background, which can be a normalization method to compare sl
 
 ```{r}
 library(Biobase)
-
+data_filtered <- rawdata
 # Extract the necessary data
 exprs_data <- exprs(data_filtered)
 feature_data <- fData(data_filtered)
@@ -283,7 +307,7 @@ for (i in seq_along(ig_pairs)) {
       x = ig_controls_data[pair[1], ],
         y = ig_controls_data[pair[2], ],
       #  Sample = colnames(ig_controls_data),
-        Scan_Name=sample_data$Scan_Name
+        Scan_Name=sample_data$ScanLabel
     )
     
     # Create the plot
@@ -301,7 +325,7 @@ for (i in seq_along(ig_pairs)) {
 print(plots)
 ```
 
-All the IgG counts are too low to use negative control normalization
+All the IgG counts are high enough to use negative control normalization if desired.
 
 ## Explore Housekeeper consistency (Housekeeping normalization)
 
@@ -317,7 +341,7 @@ feature_data <- fData(data_filtered)
 sample_data <- pData(data_filtered)
 
 # List of housekeeper genes
-housekeepers <- c("GAPDH", "S6", "Histone H3")
+housekeepers <- c("GAPDH", "RPS6", "Histone H3")
 
 # Ensure that the housekeeper genes are present in the dataset
 if (!all(housekeepers %in% rownames(feature_data))) {
@@ -343,7 +367,7 @@ for (i in seq_along(hk_pairs)) {
         x = as.numeric(hk_data[pair[1], ]),
         y = as.numeric(hk_data[pair[2], ]),
         Sample = colnames(hk_data),
-        Scan_Name=sample_data$Scan_Name
+        Scan_Name=sample_data$ScanLabel
     )
     
     # Compute the correlation coefficient
@@ -367,7 +391,7 @@ print(plots)
 print(correlations)
 ```
 
-We'll exclude S6 from housekeeping normalization due to the relatively lower correlation between it and other HK genes
+Housekeepers do not exhibit consistent and high correlations in this dataset
 
 ### Check for consistency between IgG's, housekeepers, area, nuclei counts
 
@@ -393,15 +417,15 @@ sample_data <- pData(data_filtered)
 # If not calculated, you would need to add code to calculate these from the exprs_data
 
 # Access the area variable
-area <- sample_data$AOI_surface_area
-nuclei <- sample_data$AOI_nuclei_count
+area <- sample_data$AOISurfaceArea
+nuclei <- sample_data$AOINucleiCount
 
 # Geomeans for IgGs
 ig_controls <- rownames(feature_data)[grepl("IgG", rownames(feature_data))]
 ig_geomean <- apply(exprs_data[ig_controls, ], 2, geometric_mean) # User needs to define geometric_mean or replace it with correct function
 
 # Geomeans for housekeepers
-housekeepers <- c("GAPDH", "S6", "Histone H3")
+housekeepers <- c("GAPDH", "RPS6", "Histone H3")
 hk_geomean <- apply(exprs_data[housekeepers, ], 2, geometric_mean) # As above
 
 # Create a combined data frame for plotting
@@ -411,7 +435,7 @@ consistency_data <- data.frame(
     HK_Geomean = hk_geomean,
     Area = area,
     Nuclei= nuclei,
-    Scan_Name=sample_data$Scan_Name
+    Scan_Name=sample_data$ScanLabel
 )
 
 # Plotting the relationships
@@ -472,292 +496,5 @@ print(p5)
 print(p6)
 ```
 
-Based on these results, we can consider HK (not S6) normalization and scaling to nuceli count or area.
+Based on these results, we can consider background normlalization or scaling to nuceli count or area.
 
-## Normalization
-
-We will use housekeeping normalization with GAPDH and Histone H3
-
-```{r process_norm,warning=FALSE}
-#First we need to write the expression (including sample data) and feature data to csv files so we can re-process, becuase the next steps can only be done with a list or a new object
-filt_counts <- read.csv("Zeina_all_counts.csv")
-filt_counts <- filt_counts %>% dplyr::select(c(colnames(filt_counts)[1:3], sample_data$idCol))
-filt_sample <- read.csv("Zeina_all_sample_data.csv")
-filt_sample <- filt_sample %>% dplyr::filter(idCol %in% sample_data$idCol)
-write.csv(x = filt_counts, file="filtered_counts.csv",row.names = FALSE)
-write.csv(x=filt_sample,file="filtered_sample_data.csv")
-
-#Process the filtered data with housekeeping normalization, bgType = "none"
-HKnorm_data <- processNanostringData(nsFiles = "filtered_counts.csv",
-                             sampleTab = "filtered_sample_data.csv",
-                             idCol = "idCol",
-                             groupCol = "groups",
-                             bgType="threshold",
-                             normalization = "nSolver",
-                             housekeeping = c("GAPDH","Histone H3"))
-```
-
-
-## View metadata
-
-The variable used to assess heterogeneity was called "groups" and has three levels.
-
-```{r meta,echo=FALSE}
-knitr::kable(table(HKnorm_data$groups), 
-             caption = "Distribution of Groups")
-
-knitr::kable(table(HKnorm_data$Segment), 
-             caption = "Distribution of Segments")
-
-```
-
-## View a PCA of samples (ROIs) colored by Scan_Name to assess batch effects
-
-```{r PCA1,echo=FALSE}
-data <- HKnorm_data
-# Extract expression data
-exprs_data <- data@assayData[["exprs"]]
-
-# Perform PCA on the expression data, using transpose since prcomp expects samples as rows
-pca_result <- prcomp(t(exprs_data), scale. = TRUE)
-
-# Extract sample data
-sample_data <- data@phenoData@data
-
-# Ensure Scan_Name column exists in sample_data
-if (!"Scan_Name" %in% names(sample_data)) {
-  stop("The Scan_Name column does not exist in the phenoData of the ExpressionSet.")
-}
-
-# Create a data frame for plotting
-pca_data <- data.frame(PC1 = pca_result$x[, 1],
-                       PC2 = pca_result$x[, 2],
-                       Scan_Name = sample_data$Scan_Name)
-
-# Plot PCA by scan name
-PCAp <- ggplot(pca_data, aes(x = PC1, y = PC2, color = Scan_Name)) +
-  geom_point(alpha = 0.8, size = 3) +
-  theme_minimal() +
-  labs(title = "PCA of Expression Data", x = "PC1", y = "PC2") +
-  scale_color_discrete(name = "Scan Name")
-
-# Display the plot
-print(PCAp)
-rm(data)
-```
-
-## View a PCA of samples (ROIs) colored by "group"
-
-```{r PCA2,echo=FALSE}
-data <- HKnorm_data
-# Plot PCA by group
-# Create a data frame for plotting
-pca_data <- data.frame(PC1 = pca_result$x[, 1],
-                       PC2 = pca_result$x[, 2],
-                       groups = sample_data$groups)
-
-PCAp <- ggplot(pca_data, aes(x = PC1, y = PC2, color = groups)) +
-  geom_point(alpha = 0.8, size = 3) +
-  theme_minimal() +
-  labs(title = "PCA of Expression Data", x = "PC1", y = "PC2") +
-  scale_color_discrete(name = "Groups")
-
-# Display the plot
-print(PCAp)
-rm(data)
-```
-
-## Subset just the CD45 segments and display heatmap
-
-```{r}
-CD45_data <- HKnorm_data[,pData(HKnorm_data)$Segment=="CD45"]
-```
-
-## Display a heatmap of all protein expression for the normalized CD45 segments
-
-```{r AllHeatmap,echo=FALSE}
-data <- CD45_data
-
-# Extract expression data for the genes of interest
-genes_to_plot <- rownames(data@featureData@data %>% filter(CodeClass=="Endogenous"))
-exprs_data <- data@assayData[["exprs"]]
-genes_data <- data[genes_to_plot, ]
-
-# Check if genes_to_plot actually exist in the data
-missing_genes <- genes_to_plot[!genes_to_plot %in% rownames(exprs_data)]
-if(length(missing_genes) > 0) {
-  warning("The following genes are missing in the dataset and will be skipped:", paste(missing_genes, collapse = ", "))
-}
-
-# Extract sample data and determine order based on groups
-sample_data <- data@phenoData@data
-samples_order <- order(sample_data$groups)
-
-# Prepare the data matrix for the heatmap, possibly normalizing or transforming as necessary
-heatmap_data <- genes_data[, samples_order]
-#log transform
-# Extract the expression matrix from the ExpressionSet
-exprs_data <- exprs(heatmap_data)
-# Apply log transformation. Adding a small constant to avoid log of zero issues.
-exprs_data_log <- log1p(exprs_data)
-
-
-# Plot the heatmap
-# Note: Adjust the parameters of pheatmap as needed for your specific dataset and visualization preferences
-pheatmap(exprs_data_log,
-         #scale = "row", # Scale proteins to have 0 mean and 1 variance
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         clustering_method = "complete",
-         cluster_cols = FALSE,
-         cluster_rows=FALSE,
-         color = colorRampPalette(c("blue", "white", "red"))(255), # Color gradient: adjust as needed
-         show_rownames = TRUE,
-         show_colnames = TRUE, # Change to TRUE if you want to show sample names
-         annotation_col = sample_data[samples_order,c("groups","Scan_Name"), drop = FALSE],
-         fontsize_col = 10,
-         fontsize_row = 10,# Adjust as needed for sample annotations
-main="log transformed expression levels of all proteins across all CD45 segments")
-rm(data)
-```
-
-In this heatmap, expression levels are scaled by row to highlight differences within a protein across samples. Note that in this heatmap, you cannot compare the relative levels of a protein within a sample.
-
-```{r AllHeatmap,echo=FALSE}
-data <- CD45_data
-
-# Extract expression data for the genes of interest
-genes_to_plot <- rownames(data@featureData@data %>% filter(CodeClass=="Endogenous"))
-exprs_data <- data@assayData[["exprs"]]
-genes_data <- data[genes_to_plot, ]
-
-# Check if genes_to_plot actually exist in the data
-missing_genes <- genes_to_plot[!genes_to_plot %in% rownames(exprs_data)]
-if(length(missing_genes) > 0) {
-  warning("The following genes are missing in the dataset and will be skipped:", paste(missing_genes, collapse = ", "))
-}
-
-# Extract sample data and determine order based on groups
-sample_data <- data@phenoData@data
-samples_order <- order(sample_data$groups)
-
-# Prepare the data matrix for the heatmap, possibly normalizing or transforming as necessary
-heatmap_data <- genes_data[, samples_order]
-
-# Plot the heatmap
-# Note: Adjust the parameters of pheatmap as needed for your specific dataset and visualization preferences
-pheatmap(heatmap_data,
-         scale = "row", # Scale proteins to have 0 mean and 1 variance
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         clustering_method = "complete",
-         cluster_cols = FALSE,
-         cluster_rows=FALSE,
-         color = colorRampPalette(c("blue", "white", "red"))(255), # Color gradient: adjust as needed
-         show_rownames = TRUE,
-         show_colnames = TRUE, # Change to TRUE if you want to show sample names
-         annotation_col = sample_data[samples_order,c("groups","Scan_Name"), drop = FALSE],
-         fontsize_col = 10,
-         fontsize_row = 10,# Adjust as needed for sample annotations
-main="row-scaled levels of all proteins across all CD45 segments")
-rm(data)
-```
-
-## Perform a differential expression analysis of "group" and display results
-
-```{r DE}
-#Differential expression
-limmaResults <- runLimmaAnalysis(data, base.group = "Insulitis_Islet")
-limmaStats <- makeDiffExprFile(limmaResults, filename = NULL, returns = "stats")
-limmaStats <- as.data.frame(limmaStats)
-
-# Rounding for clarity
-limmaTab <- limmaStats[order(limmaStats$`p-val (Insulitis_NoIslet)`, 
-                                  decreasing = FALSE), 1:4] %>% filter(`p-val (Insulitis_NoIslet)` < 0.05)
-limmaTab[,1] <- format(limmaTab[,1], digits = 2, nsmall = 1)
-limmaTab[,3] <- format(limmaTab[,3], digits = 1, scientific = FALSE)
-limmaTab[,4] <- format(limmaTab[,4], digits = 1, nsmall = 1)
-
-knitr::kable(limmaTab,caption="DE genes (p. val < 0.05) Insulitis_NoIslet vs. Insulitis_Islet")
-```
-
-## Violin Plots of normalized gene expression for DE genes by "group"
-
-```{r Violin,echo=FALSE}
-#Violin Plots
-
-# Extract expression data
-exprs_data <- data@assayData[["exprs"]]
-
-# Extract sample data
-sample_data <- data@phenoData@data
-
-# Make sure groups column exists in sample_data
-if (!"groups" %in% names(sample_data)) {
-  stop("The groups column does not exist in the phenoData of the ExpressionSet.")
-}
-
-# For each gene in rownames(limmaTab), plot a violin plot
-genes_to_plot <- rownames(limmaTab)
-
-# Loop through each gene to plot
-for (gene in genes_to_plot) {
-  if (!gene %in% rownames(exprs_data)) {
-    warning(paste("Gene", gene, "not found in ExpressionSet rownames. Skipping."))
-    next
-  }
-  
-  # Extract the data for the gene
-  gene_data <- data.frame(expression = exprs_data[gene, ], group = sample_data$groups)
-  
-  # Melt the data frame for plotting
-  melted_data <- melt(gene_data, id.vars = "group", variable.name = "Gene", value.name = "Expression")
-  
-  # Plot the violin plot
-  p <- ggplot(melted_data, aes(x = group, y = Expression)) +
-    geom_violin(trim = FALSE) +
-    geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
-    labs(title = paste("Expression of", gene), x = "Group", y = "Expression Level") +
-    theme_minimal()
-  
-  # Display the plot
-  print(p)
-}
-```
-
-## Violin Plots of normalized gene expression for DE genes by "group"
-
-```{r Heatmap,echo=FALSE}
-# Heatmap 
-
-# Extract expression data for the genes of interest
-genes_to_plot <- rownames(limmaTab)
-exprs_data <- data@assayData[["exprs"]]
-genes_data <- exprs_data[genes_to_plot, ]
-
-# Check if genes_to_plot actually exist in the data
-missing_genes <- genes_to_plot[!genes_to_plot %in% rownames(exprs_data)]
-if(length(missing_genes) > 0) {
-  warning("The following genes are missing in the dataset and will be skipped:", paste(missing_genes, collapse = ", "))
-}
-
-# Extract sample data and determine order based on groups
-sample_data <- data@phenoData@data
-samples_order <- order(sample_data$groups)
-
-# Prepare the data matrix for the heatmap, possibly normalizing or transforming as necessary
-heatmap_data <- genes_data[, samples_order]
-
-# Plot the heatmap
-# Note: Adjust the parameters of pheatmap as needed for your specific dataset and visualization preferences
-pheatmap(heatmap_data,
-         scale = "row", # Scale genes to have 0 mean and 1 variance
-         clustering_distance_rows = "euclidean",
-         clustering_distance_cols = "euclidean",
-         clustering_method = "complete",
-         color = colorRampPalette(c("blue", "white", "red"))(255), # Color gradient: adjust as needed
-         show_rownames = TRUE,
-         show_colnames = FALSE, # Change to TRUE if you want to show sample names
-         annotation_col = sample_data[samples_order,c("groups","Scan_Name"), drop = FALSE] # Adjust as needed for sample annotations
-)
-```
