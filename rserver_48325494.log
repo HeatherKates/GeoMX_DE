@@ -1,5 +1,0 @@
-Starting rserver on port 3359 in the /blue/timgarrett/hkates/Campbell-Thompson/HuBMAP_Analyses directory.
-Create an SSH tunnel with:
-ssh -N -L 8080:c0710a-s28.ufhpc:3359 hkates@hpg.rc.ufl.edu
-Then, open in the local browser:
-http://localhost:8080
